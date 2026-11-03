@@ -16,4 +16,5 @@ class Zone:
             return 2
         if self.zone_type == "blocked":
             raise ValueError("Cannot enter a blocked zone")
+        
         return 1

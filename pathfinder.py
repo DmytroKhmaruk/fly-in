@@ -39,15 +39,20 @@ class Pathfinder:
         path.reverse()
         return path
 
-    def dijkstra(self, start: str, end: str) -> list[str]:
+    def dijkstra(self, start: str, end: str, excluded: set[str] | None = None) -> list[str]:
         if start not in self.graph.zones:
             raise ValueError(f"Unknown start zone: {start}")
         if end not in self.graph.zones:
             raise ValueError(f"Unknown end zone: {end}")
+        if excluded is None:
+            excluded = set()
+        if start in excluded or end in excluded:
+            return []
         if self.graph.zones[start].zone_type == "blocked":
             return []
         if self.graph.zones[end].zone_type == "blocked":
             return []
+
 
         distances: dict[str, int] = {start: 0}
         parent: dict[str,str | None] = {start: None}
@@ -62,7 +67,7 @@ class Pathfinder:
             
             for neighbor in self.graph.adjacency[current]:
                 zone = self.graph.zones[neighbor]
-                if zone.zone_type == "blocked":
+                if (neighbor in excluded or zone.zone_type == "blocked"):
                     continue
                 
                 new_cost = current_cost + zone.movement_cost()
@@ -71,3 +76,18 @@ class Pathfinder:
                     parent[neighbor] = current
                     heapq.heappush(heap, (new_cost, neighbor))
         return []
+
+    def find_disjoint_paths(self, start: str, end: str) -> list[list[str]]:
+        paths: list[list[str]] = []
+        excluded: set[str] = set()
+
+        while True:
+            path = self.dijkstra(start, end, excluded)
+            if not path:
+                break
+            paths.append(path)
+            for zone_name in path[1:-1]:
+                excluded.add(zone_name)
+            if len(path) == 2:
+                break
+        return paths
