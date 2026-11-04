@@ -17,18 +17,26 @@ class Drone:
     @property
     def current_zone(self) -> str:
         return self.path[self.position]
-        
+
     @property
     def next_zone(self) -> str | None:
         if self.finished or self.in_transit:
             return None
-            
+
         next_index = self.position + 1
         if next_index >= len(self.path):
             return None
 
         return self.path[next_index]
-        
+
+    def start_transit(self) -> None:
+        if self.finished or self.in_transit:
+            raise ValueError("Drone cannot start transit")
+        if self.position + 1 >= len(self.path):
+            raise ValueError("No next zone")
+        self.in_transit = True
+        self.remaining_turns = 1
+
     def arrive(self) -> None:
         if self.finished:
             raise ValueError("Drone is already delivered")
