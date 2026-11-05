@@ -34,6 +34,28 @@ class Simulation:
 
         return counts
 
+    def _guaranteed_departures(self, arriving: list[Drone], destination: str,
+                               end: str) -> int:
+        candidates = 0
+        for drone in arriving:
+            next_index = drone.position + 1
+            if drone.path[next_index] != destination:
+                continue
+
+            after_index = next_index + 1
+            if after_index >= len(drone.path):
+                continue
+
+            if drone.path[after_index] == end:
+                candidates += 1
+
+        if candidates == 0:
+            return 0
+
+        key = frozenset((destination, end))
+        connection = self.graph.connections[key]
+        return min(candidates, connection.max_link_capacity)
+
     def _plan_turn(self) -> tuple[list[Drone], list[Drone], list[Drone]]:
         occupancy = self._occupancy()
         arriving = [drone for drone in self.drones if drone.in_transit]
@@ -43,71 +65,85 @@ class Simulation:
         reserved_next: dict[str, int] = {}
         direct: list[Drone] = []
         starting: list[Drone] = []
-
+        end = self.drones[0].path[-1] if self.drones else ""
         for drone in arriving:
             destination = drone.path[drone.position + 1]
             entering[destination] = (
-                entering.get(destination, 0) + 1
-            )
+                entering.get(destination, 0) + 1)
 
-        ordered = sorted(self.drones, key=lambda drone: drone.position,
-                         reverse=True)
-        end = self.drones[0].path[-1] if self.drones else ""
-        for drone in ordered:
-            if drone.finished or drone.in_transit:
-                continue
-
-            destination = drone.next_zone
-            if destination is None:
-                continue
-
-            origin = drone.current_zone
-            key = frozenset((origin, destination))
-            connection = self.graph.connections[key]
-            used = link_usage.get(key, 0)
-            if used >= connection.max_link_capacity:
-                continue
-
-            zone = self.graph.zones[destination]
-            restricted = zone.zone_type == "restricted"
-            if restricted:
-                occupied = occupancy.get(destination, 0)
-                arriving_now = entering.get(destination, 0)
-                reserved = reserved_next.get(destination, 0)
-
-                if (occupied + arriving_now + reserved >= zone.max_drones):
+        pending = [
+            drone for drone in self.drones
+            if not drone.finished and not drone.in_transit]
+        while pending:
+            progress = False
+            still_pending: list[Drone] = []
+            for drone in pending:
+                destination = drone.next_zone
+                if destination is None:
                     continue
 
-            if not restricted and destination != end:
-                occupied = occupancy.get(destination, 0)
-                outgoing = leaving.get(destination, 0)
-                incoming = entering.get(destination, 0)
-                available = (zone.max_drones - occupied + outgoing - incoming)
-                if available <= 0:
+                origin = drone.current_zone
+                key = frozenset((origin, destination))
+                connection = self.graph.connections[key]
+                used = link_usage.get(key, 0)
+                if used >= connection.max_link_capacity:
+                    still_pending.append(drone)
                     continue
 
-            link_usage[key] = used + 1
-            leaving[origin] = leaving.get(origin, 0) + 1
+                zone = self.graph.zones[destination]
+                restricted = zone.zone_type == "restricted"
+                if restricted and destination != end:
+                    occupied = occupancy.get(destination, 0)
+                    outgoing = leaving.get(destination, 0)
+                    arriving_now = entering.get(destination, 0)
+                    reserved = reserved_next.get(destination, 0)
+                    guaranteed = self._guaranteed_departures(
+                        arriving, destination, end)
 
-            if restricted:
-                starting.append(drone)
-                reserved_next[destination] = (
-                    reserved_next.get(destination, 0) + 1)
-            else:
-                direct.append(drone)
-                entering[destination] = (entering.get(destination, 0) + 1)
+                    future_count = (
+                        occupied - outgoing
+                        + arriving_now - guaranteed + reserved)
+                    if future_count >= zone.max_drones:
+                        still_pending.append(drone)
+                        continue
 
-        for drone in arriving:
-            destination = drone.path[drone.position + 1]
-            if destination == end:
+                elif destination != end:
+                    occupied = occupancy.get(destination, 0)
+                    outgoing = leaving.get(destination, 0)
+                    incoming = entering.get(destination, 0)
+                    available = (
+                        zone.max_drones - occupied
+                        + outgoing - incoming)
+                    if available <= 0:
+                        still_pending.append(drone)
+                        continue
+
+                link_usage[key] = used + 1
+                leaving[origin] = leaving.get(origin, 0) + 1
+                if restricted:
+                    starting.append(drone)
+                    reserved_next[destination] = (
+                        reserved_next.get(destination, 0) + 1)
+                else:
+                    direct.append(drone)
+                    entering[destination] = (entering.get(destination, 0) + 1)
+
+                progress = True
+
+            if not progress:
+                break
+
+            pending = still_pending
+        for name, zone in self.graph.zones.items():
+            if name == end:
                 continue
-            zone = self.graph.zones[destination]
 
             final_count = (
-                occupancy.get(destination, 0)
-                - leaving.get(destination, 0) + entering.get(destination, 0))
+                occupancy.get(name, 0)
+                - leaving.get(name, 0)
+                + entering.get(name, 0))
             if final_count > zone.max_drones:
-                raise RuntimeError(f"Arrival conflict in zone {destination}")
+                raise RuntimeError(f"Capacity exceeded in zone {name}")
 
         return arriving, direct, starting
 
