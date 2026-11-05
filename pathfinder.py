@@ -2,9 +2,11 @@ from collections import deque
 from graph import Graph
 import heapq
 
+
 class Pathfinder:
     def __init__(self, graph: Graph) -> None:
         self.graph = graph
+
     def bfs(self, start: str, end: str) -> list[str]:
         if start not in self.graph.zones:
             raise ValueError(f"Unknowm start zone: {start}")
@@ -18,7 +20,7 @@ class Pathfinder:
             current = queue.popleft()
             if current == end:
                 return self._build_path(parent, end)
-            
+
             for neighbor in self.graph.adjacency[current]:
                 zone = self.graph.zones[neighbor]
                 if zone.zone_type == "blocked":
@@ -28,8 +30,9 @@ class Pathfinder:
                     parent[neighbor] = current
                     queue.append(neighbor)
         return []
-    
-    def _build_path(self, parent: dict[str, str | None], end: str,) -> list[str]:
+
+    def _build_path(self, parent: dict[str, str | None], end: str
+                    ) -> list[str]:
         path: list[str] = []
         current: str | None = end
 
@@ -39,7 +42,8 @@ class Pathfinder:
         path.reverse()
         return path
 
-    def dijkstra(self, start: str, end: str, excluded: set[str] | None = None) -> list[str]:
+    def dijkstra(self, start: str, end: str, excluded: set[str] | None = None
+                 ) -> list[str]:
         if start not in self.graph.zones:
             raise ValueError(f"Unknown start zone: {start}")
         if end not in self.graph.zones:
@@ -53,10 +57,9 @@ class Pathfinder:
         if self.graph.zones[end].zone_type == "blocked":
             return []
 
-
         distances: dict[str, int] = {start: 0}
-        parent: dict[str,str | None] = {start: None}
-        
+        parent: dict[str, str | None] = {start: None}
+
         heap: list[tuple[int, str]] = [(0, start)]
         while heap:
             current_cost, current = heapq.heappop(heap)
@@ -64,14 +67,15 @@ class Pathfinder:
                 continue
             if current == end:
                 return self._build_path(parent, end)
-            
+
             for neighbor in self.graph.adjacency[current]:
                 zone = self.graph.zones[neighbor]
                 if (neighbor in excluded or zone.zone_type == "blocked"):
                     continue
-                
+
                 new_cost = current_cost + zone.movement_cost()
-                if (neighbor not in distances or new_cost < distances[neighbor]):
+                if (neighbor not in distances
+                        or new_cost < distances[neighbor]):
                     distances[neighbor] = new_cost
                     parent[neighbor] = current
                     heapq.heappush(heap, (new_cost, neighbor))

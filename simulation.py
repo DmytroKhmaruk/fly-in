@@ -40,6 +40,7 @@ class Simulation:
         leaving: dict[str, int] = {}
         entering: dict[str, int] = {}
         link_usage: dict[frozenset[str], int] = {}
+        reserved_next: dict[str, int] = {}
         direct: list[Drone] = []
         starting: list[Drone] = []
 
@@ -69,6 +70,14 @@ class Simulation:
 
             zone = self.graph.zones[destination]
             restricted = zone.zone_type == "restricted"
+            if restricted:
+                occupied = occupancy.get(destination, 0)
+                arriving_now = entering.get(destination, 0)
+                reserved = reserved_next.get(destination, 0)
+
+                if (occupied + arriving_now + reserved >= zone.max_drones):
+                    continue
+
             if not restricted and destination != end:
                 occupied = occupancy.get(destination, 0)
                 outgoing = leaving.get(destination, 0)
@@ -79,8 +88,11 @@ class Simulation:
 
             link_usage[key] = used + 1
             leaving[origin] = leaving.get(origin, 0) + 1
+
             if restricted:
                 starting.append(drone)
+                reserved_next[destination] = (
+                    reserved_next.get(destination, 0) + 1)
             else:
                 direct.append(drone)
                 entering[destination] = (entering.get(destination, 0) + 1)

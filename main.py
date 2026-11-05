@@ -21,7 +21,7 @@ def main() -> None:
         )
 
         pathfinder = Pathfinder(graph)
-        scheduler = Scheduler()
+        scheduler = Scheduler(graph)
 
         paths = pathfinder.find_disjoint_paths(
             start, end

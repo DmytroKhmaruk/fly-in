@@ -1,19 +1,21 @@
 from zone import Zone
 from connection import Connection
 
+
 class Graph:
     def __init__(self) -> None:
         self.zones: dict[str, Zone] = {}
         self.adjacency: dict[str, list[str]] = {}
         self.connections: dict[frozenset[str], Connection] = {}
-    
+
     def add_zone(self, zone: Zone) -> None:
         if zone.name in self.zones:
             raise ValueError(f"Duplicate zone: {zone.name}")
         self.zones[zone.name] = zone
         self.adjacency[zone.name] = []
 
-    def add_connection(self, first: str, second: str, max_link_capacity: int = 1,) -> None:
+    def add_connection(self, first: str, second: str,
+                       max_link_capacity: int = 1) -> None:
         if first not in self.zones or second not in self.zones:
             raise ValueError("Connection refers to an unknown zone")
         if first == second:
