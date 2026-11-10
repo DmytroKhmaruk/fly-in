@@ -56,6 +56,94 @@ class Simulation:
         connection = self.graph.connections[key]
         return min(candidates, connection.max_link_capacity)
 
+
+    def _plan_cycles(self, pending: list[Drone], occupancy: dict[str, int], leaving: dict[str, int], entering: dict[str, int],
+                     link_usage: dict[frozenset[str], int], direct: list[Drone]) -> None:
+        candidates: dict[str, Drone] = {}
+        for drone in pending:
+            origin = drone.current_zone
+            if origin == drone.path[0]:
+                continue
+            if occupancy.get(origin, 0) != 1:
+                continue
+            if leaving.get(origin, 0) != 0:
+                continue
+            if entering.get(origin, 0) != 0:
+                continue
+
+            candidates[origin] = drone
+        scheduled: set[int] = set()
+        for start in candidates:
+            if candidates[start].drone_id in scheduled:
+                continue
+
+            seen: dict[str, int] = {}
+            chain: list[Drone] = []
+            cycle: list[Drone] = []
+            current = start
+            while current in candidates:
+                if current in seen:
+                    cycle = chain[seen[current]:]
+                    break
+
+                seen[current] = len(chain)
+                drone = candidates[current]
+                destination = drone.next_zone
+                if destination is None:
+                    break
+
+                zone = self.graph.zones[destination]
+                if zone.zone_type == "restricted":
+                    break
+                if destination not in candidates:
+                    break
+
+                chain.append(drone)
+                current = destination
+            else:
+                cycle = []
+
+            if not cycle:
+                continue
+            if len(cycle) < 2:
+                continue
+
+            usage: dict[frozenset[str], int] = {}
+            valid = True
+            for drone in cycle:
+                destination = drone.next_zone
+                if destination is None:
+                    valid = False
+                    break
+
+                origin = drone.current_zone
+                key = frozenset((origin, destination))
+                connection = self.graph.connections[key]
+                usage[key] = usage.get(key, 0) + 1
+                total = (link_usage.get(key, 0) + usage[key])
+                if total > connection.max_link_capacity:
+                    valid = False
+                    break
+                if self.graph.zones[destination].max_drones < 1:
+                    valid = False
+                    break
+
+            if not valid:
+                continue
+
+            for drone in cycle:
+                destination = drone.next_zone
+                if destination is None:
+                    raise RuntimeError("Invalid cycle")
+
+                origin = drone.current_zone
+                key = frozenset((origin, destination))
+                direct.append(drone)
+                scheduled.add(drone.drone_id)
+                leaving[origin] = leaving.get(origin, 0) + 1
+                entering[destination] = (entering.get(destination, 0) + 1)
+                link_usage[key] = (link_usage.get(key, 0) + 1)
+
     def _plan_turn(self) -> tuple[list[Drone], list[Drone], list[Drone]]:
         occupancy = self._occupancy()
         arriving = [drone for drone in self.drones if drone.in_transit]
@@ -66,6 +154,7 @@ class Simulation:
         direct: list[Drone] = []
         starting: list[Drone] = []
         end = self.drones[0].path[-1] if self.drones else ""
+        start = self.drones[0].path[0] if self.drones else ""
         for drone in arriving:
             destination = drone.path[drone.position + 1]
             entering[destination] = (
@@ -134,8 +223,10 @@ class Simulation:
                 break
 
             pending = still_pending
+
+        self._plan_cycles(pending, occupancy, leaving, entering, link_usage, direct)
         for name, zone in self.graph.zones.items():
-            if name == end:
+            if name == start or name == end:
                 continue
 
             final_count = (
