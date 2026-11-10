@@ -1,6 +1,7 @@
 
 from drone import Drone
 from graph import Graph
+from validator import SimulationValidator
 
 
 class Simulation:
@@ -9,6 +10,7 @@ class Simulation:
         self.drones = drones
         self.turn = 0
         self._validate_paths()
+        self.validator = SimulationValidator(graph)
 
     def _validate_paths(self) -> None:
         for drone in self.drones:
@@ -243,7 +245,12 @@ class Simulation:
         if not arriving and not direct and not starting:
             if not all(drone.finished for drone in self.drones):
                 raise RuntimeError("Simulation is blocked")
+        
+        
+        start = self.drones[0].path[0] if self.drones else ""
+        end = self.drones[0].path[-1] if self.drones else ""
 
+        self.validator.validate_plan(self.drones, arriving, direct, starting, start, end)
         self.turn += 1
         movements: list[str] = []
         for drone in arriving:
@@ -264,6 +271,7 @@ class Simulation:
             drone.start_transit()
             movements.append(f"D{drone.drone_id}-{origin}-{destination}")
 
+        self.validator.validate_state(self.drones, start, end)
         return movements
 
     def run(self) -> None:
