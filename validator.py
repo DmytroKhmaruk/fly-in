@@ -11,11 +11,18 @@ class SimulationValidator:
                        ) -> None:
         occupancy: Counter[str] = Counter()
         identifiers: set[int] = set()
+        transit_links: Counter[frozenset[str]] = Counter()
         for drone in drones:
             if drone.drone_id in identifiers:
                 raise ValueError("Duplicate drone ID")
 
             identifiers.add(drone.drone_id)
+            if not 0 <= drone.position < len(drone.path):
+                raise ValueError(f"Invalid position for D{drone.drone_id}")
+
+            if drone.finished and drone.in_transit:
+                raise ValueError(f"Invalid state for D{drone.drone_id}")
+
             if drone.in_transit:
                 if drone.remaining_turns != 1:
                     raise ValueError("Invalid transit duration")
@@ -25,6 +32,15 @@ class SimulationValidator:
                     raise ValueError("Missing transit target")
 
                 destination = drone.path[next_index]
+                origin = drone.current_zone
+                key = frozenset((origin, destination))
+                if key not in self.graph.connections:
+                    raise ValueError(
+                        f"Unknown transit connection: "
+                        f"{origin}-{destination}"
+                    )
+
+                transit_links[key] += 1
                 if (self.graph.zones[destination].zone_type != "restricted"):
                     raise ValueError("Invalid transit target")
                 continue
@@ -42,10 +58,27 @@ class SimulationValidator:
             if count > capacity:
                 raise ValueError(f"Zone {name}: {count}/{capacity} drones")
 
+        for key, count in transit_links.items():
+            capacity = self.graph.connections[key].max_link_capacity
+            if count > capacity:
+                raise ValueError("Transit connection capacity exceeded")
+
     def validate_plan(self, drones: list[Drone], arriving: list[Drone],
                       direct: list[Drone], starting: list[Drone], start: str,
                       end: str) -> None:
         selected = arriving + direct + starting
+        drone_ids = {id(drone) for drone in drones}
+        for drone in selected:
+            if id(drone) not in drone_ids:
+                raise ValueError("Plan contains an unknown drone")
+
+        arriving_ids = {id(drone) for drone in arriving}
+        for drone in drones:
+            if drone.in_transit:
+                if id(drone) not in arriving_ids:
+                    raise ValueError(f"D{drone.drone_id} must arrive this turn"
+                                     )
+
         selected_ids = [d.drone_id for d in selected]
         if len(selected_ids) != len(set(selected_ids)):
             raise ValueError("Drone scheduled more than once")

@@ -1,4 +1,4 @@
-
+from copy import deepcopy
 from drone import Drone
 from graph import Graph
 from validator import SimulationValidator
@@ -11,19 +11,51 @@ class Simulation:
         self.turn = 0
         self._validate_paths()
         self.validator = SimulationValidator(graph)
+        self._enable_lookahead = True
 
     def _validate_paths(self) -> None:
+        if not self.drones:
+            raise ValueError("Simulation requires drones")
+
+        first_path = self.drones[0].path
+        if len(first_path) < 2:
+            raise ValueError("Drone path is too short")
+
+        start = first_path[0]
+        end = first_path[-1]
+
+        if start == end:
+            raise ValueError("Start and End must differ")
+
+        identifiers: set[int] = set()
         for drone in self.drones:
-            for name in drone.path:
+            if drone.drone_id in identifiers:
+                raise ValueError("Duplicate drone ID")
+
+            identifiers.add(drone.drone_id)
+            path = drone.path
+            if len(path) < 2:
+                raise ValueError(f"Invalid path for D{drone.drone_id}")
+
+            if path[0] != start or path[-1] != end:
+                raise ValueError("Drones have different Start or End")
+
+            for name in path:
                 if name not in self.graph.zones:
                     raise ValueError(f"Unknown zone: {name}")
-                if self.graph.zones[name].zone_type == "blocked":
+
+                zone = self.graph.zones[name]
+                if zone.zone_type == "blocked":
                     raise ValueError(f"Blocked zone: {name}")
 
-            for first, second in zip(drone.path, drone.path[1:]):
+            for first, second in zip(path, path[1:]):
                 key = frozenset((first, second))
+
                 if key not in self.graph.connections:
-                    raise ValueError(f"Missing connection: {first}-{second}")
+                    raise ValueError(
+                        f"Missing connection: "
+                        f"{first}-{second}"
+                    )
 
     def _occupancy(self) -> dict[str, int]:
         counts: dict[str, int] = {}
@@ -147,6 +179,94 @@ class Simulation:
                 entering[destination] = (entering.get(destination, 0) + 1)
                 link_usage[key] = (link_usage.get(key, 0) + 1)
 
+    def _add_lookahead_starts(self, arriving: list[Drone], direct: list[Drone],
+                              starting: list[Drone]) -> None:
+        start = self.drones[0].path[0]
+        end = self.drones[0].path[-1]
+        selected = {
+            drone.drone_id
+            for drone in arriving + direct + starting
+        }
+
+        for drone in self.drones:
+            if (
+                drone.finished
+                or drone.in_transit
+                or drone.drone_id in selected
+            ):
+                continue
+
+            destination = drone.next_zone
+            if destination is None:
+                continue
+
+            if (
+                self.graph.zones[destination].zone_type
+                != "restricted"
+            ):
+                continue
+
+            origin = drone.current_zone
+            key = frozenset((origin, destination))
+            connection = self.graph.connections[key]
+            used = sum(
+                frozenset(
+                    (moving.current_zone, moving.path[moving.position + 1])
+                ) == key
+                for moving in direct + starting
+            )
+
+            if used >= connection.max_link_capacity:
+                continue
+
+            candidate_starting = starting + [drone]
+            try:
+                self.validator.validate_plan(
+                    self.drones, arriving, direct,
+                    candidate_starting, start, end
+                )
+                copied_drones = deepcopy(self.drones)
+                copies = {
+                    original.drone_id: copied
+                    for original, copied in zip(
+                        self.drones, copied_drones
+                    )
+                }
+
+                for moving in arriving + direct:
+                    copies[moving.drone_id].arrive()
+
+                for moving in candidate_starting:
+                    copies[moving.drone_id].start_transit()
+
+                probe = Simulation(
+                    self.graph,
+                    copied_drones,
+                )
+                probe._enable_lookahead = False
+                probe.validator.validate_state(copied_drones, start, end)
+                next_arriving, next_direct, next_starting = (
+                    probe._plan_turn()
+                )
+                probe.validator.validate_plan(
+                    copied_drones, next_arriving, next_direct,
+                    next_starting, start, end
+                )
+
+                for moving in next_arriving + next_direct:
+                    moving.arrive()
+
+                for moving in next_starting:
+                    moving.start_transit()
+
+                probe.validator.validate_state(copied_drones, start, end)
+
+            except (ValueError, RuntimeError):
+                continue
+
+            starting.append(drone)
+            selected.add(drone.drone_id)
+
     def _plan_turn(self) -> tuple[list[Drone], list[Drone], list[Drone]]:
         occupancy = self._occupancy()
         arriving = [drone for drone in self.drones if drone.in_transit]
@@ -241,6 +361,8 @@ class Simulation:
                 + entering.get(name, 0))
             if final_count > zone.max_drones:
                 raise RuntimeError(f"Capacity exceeded in zone {name}")
+        if self._enable_lookahead:
+            self._add_lookahead_starts(arriving, direct, starting)
 
         return arriving, direct, starting
 

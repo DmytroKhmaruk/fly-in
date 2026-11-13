@@ -129,7 +129,9 @@ class DroneGUI:
             if self._is_complete() or self.error_message:
                 return
             try:
-                self.simulation.step()
+                movements = self.simulation.step()
+                if movements:
+                    print(" ".join(movements), flush=True)
             except (RuntimeError, ValueError) as error:
                 self.error_message = str(error)
                 self.paused = True
