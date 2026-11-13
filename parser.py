@@ -11,7 +11,11 @@ class MapParser:
         self.end: str | None = None
 
     def parse(self, filename: str) -> tuple[Graph, int, str, str]:
-        self.__init__()
+        self.graph = Graph()
+        self.nb_drones = 0
+        self.start = None
+        self.end = None
+        
         with Path(filename).open("r", encoding="utf-8") as file:
             lines = file.readlines()
 
@@ -61,7 +65,10 @@ class MapParser:
             return content.strip(), ""
 
         main, metadata = content.split("[", 1)
-        if (not metadata.endswith("]") or "[" in metadata or "]" in main):
+        if (
+            not metadata.endswith("]") or "[" in metadata
+            or "]" in main or "]" in metadata[:-1]
+        ):
             raise ValueError("Invalid metadata brackets")
 
         return main.strip(), metadata[:-1].strip()
@@ -115,10 +122,12 @@ class MapParser:
             meta_text, {"zone", "color", "max_drones"})
 
         zone_type = metadata.get("zone", "normal")
+        color = metadata.get("color", "none")
+        allowed_types = {"normal", "blocked", "restricted", "priority"}
+        if zone_type not in allowed_types:
+            raise ValueError(f"Invalid zone type: {zone_type}")
         capacity = self._positive_int(
-            metadata.get("max_drones", "1"),
-            "max_drones",
-        )
+            metadata.get("max_drones", "1"), "max_drones")
 
         if prefix == "start_hub":
             if self.start is not None:
@@ -127,7 +136,7 @@ class MapParser:
             if self.end is not None:
                 raise ValueError("Duplicate end_hub")
 
-        zone = Zone(name, x, y, zone_type, capacity)
+        zone = Zone(name, x, y, zone_type, capacity, color)
         self.graph.add_zone(zone)
         if prefix == "start_hub":
             self.start = name

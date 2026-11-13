@@ -7,7 +7,8 @@ class SimulationValidator:
     def __init__(self, graph: Graph) -> None:
         self.graph = graph
 
-    def validate_state(self, drones: list[Drone], start: str, end: str) -> None:
+    def validate_state(self, drones: list[Drone], start: str, end: str
+                       ) -> None:
         occupancy: Counter[str] = Counter()
         identifiers: set[int] = set()
         for drone in drones:
@@ -41,8 +42,9 @@ class SimulationValidator:
             if count > capacity:
                 raise ValueError(f"Zone {name}: {count}/{capacity} drones")
 
-    def validate_plan(self, drones: list[Drone], arriving: list[Drone], direct: list[Drone],
-                      starting: list[Drone], start: str, end: str) -> None:
+    def validate_plan(self, drones: list[Drone], arriving: list[Drone],
+                      direct: list[Drone], starting: list[Drone], start: str,
+                      end: str) -> None:
         selected = arriving + direct + starting
         selected_ids = [d.drone_id for d in selected]
         if len(selected_ids) != len(set(selected_ids)):

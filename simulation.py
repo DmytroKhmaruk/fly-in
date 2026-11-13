@@ -58,9 +58,10 @@ class Simulation:
         connection = self.graph.connections[key]
         return min(candidates, connection.max_link_capacity)
 
-
-    def _plan_cycles(self, pending: list[Drone], occupancy: dict[str, int], leaving: dict[str, int], entering: dict[str, int],
-                     link_usage: dict[frozenset[str], int], direct: list[Drone]) -> None:
+    def _plan_cycles(self, pending: list[Drone], occupancy: dict[str, int],
+                     leaving: dict[str, int], entering: dict[str, int],
+                     link_usage: dict[frozenset[str], int], direct: list[Drone]
+                     ) -> None:
         candidates: dict[str, Drone] = {}
         for drone in pending:
             origin = drone.current_zone
@@ -168,11 +169,13 @@ class Simulation:
         while pending:
             progress = False
             still_pending: list[Drone] = []
+
             for drone in pending:
-                destination = drone.next_zone
-                if destination is None:
+                next_destination = drone.next_zone
+                if next_destination is None:
                     continue
 
+                destination = next_destination
                 origin = drone.current_zone
                 key = frozenset((origin, destination))
                 connection = self.graph.connections[key]
@@ -226,7 +229,8 @@ class Simulation:
 
             pending = still_pending
 
-        self._plan_cycles(pending, occupancy, leaving, entering, link_usage, direct)
+        self._plan_cycles(pending, occupancy, leaving, entering, link_usage,
+                          direct)
         for name, zone in self.graph.zones.items():
             if name == start or name == end:
                 continue
@@ -245,12 +249,12 @@ class Simulation:
         if not arriving and not direct and not starting:
             if not all(drone.finished for drone in self.drones):
                 raise RuntimeError("Simulation is blocked")
-        
-        
+
         start = self.drones[0].path[0] if self.drones else ""
         end = self.drones[0].path[-1] if self.drones else ""
 
-        self.validator.validate_plan(self.drones, arriving, direct, starting, start, end)
+        self.validator.validate_plan(self.drones, arriving, direct, starting,
+                                     start, end)
         self.turn += 1
         movements: list[str] = []
         for drone in arriving:
