@@ -1,47 +1,10 @@
 import heapq
-from collections import deque
 from graph import Graph
 
 
 class Pathfinder:
     def __init__(self, graph: Graph) -> None:
         self.graph = graph
-
-    def bfs(self, start: str, end: str) -> list[str]:
-        if start not in self.graph.zones:
-            raise ValueError(f"Unknown start zone: {start}")
-
-        if end not in self.graph.zones:
-            raise ValueError(f"Unknown end zone: {end}")
-
-        if (
-            self.graph.zones[start].zone_type == "blocked"
-            or self.graph.zones[end].zone_type == "blocked"
-        ):
-            return []
-
-        queue: deque[str] = deque([start])
-        visited: set[str] = {start}
-        parent: dict[str, str | None] = {start: None}
-        while queue:
-            current = queue.popleft()
-
-            if current == end:
-                return self._build_path(parent, end)
-
-            for neighbor in self.graph.adjacency[current]:
-                if neighbor in visited:
-                    continue
-
-                zone = self.graph.zones[neighbor]
-                if zone.zone_type == "blocked":
-                    continue
-
-                visited.add(neighbor)
-                parent[neighbor] = current
-                queue.append(neighbor)
-
-        return []
 
     def _build_path(self, parent: dict[str, str | None], end: str
                     ) -> list[str]:

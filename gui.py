@@ -268,7 +268,7 @@ class DroneGUI:
             pygame.draw.circle(self.screen, self.WHITE, center, 10, 1)
             label = self.small_font.render(str(drone_id), True,
                                            self.BACKGROUND)
-            self.screen.blit(label, label.get_rect(center=center),)
+            self.screen.blit(label, label.get_rect(center=center))
 
     def _draw_hover(self) -> None:
         mouse = pygame.mouse.get_pos()
