@@ -15,7 +15,6 @@ class MapParser:
         self.nb_drones = 0
         self.start = None
         self.end = None
-        
         with Path(filename).open("r", encoding="utf-8") as file:
             lines = file.readlines()
 
