@@ -183,21 +183,19 @@ class DroneGUI:
             x, y = self._screen_point(zone.x, zone.y)
             center = (round(x), round(y))
             color = self.COLORS.get(zone.zone_type, self.EDGE)
-            if zone.color != "none":
-                try:
-                    custom_color = pygame.Color(zone.color)
-                    color = (
-                        custom_color.r,
-                        custom_color.g,
-                        custom_color.b,
-                    )
-                except ValueError:
-                    pass
 
             if name == self.start:
                 color = (22, 163, 74)
             elif name == self.end:
                 color = (245, 158, 11)
+
+            if zone.color != "none":
+                try:
+                    custom_color = pygame.Color(zone.color)
+                    color = (custom_color.r, custom_color.g, custom_color.b)
+                except ValueError:
+                    pass
+
             pygame.draw.circle(self.screen, color, center, 21)
             pygame.draw.circle(self.screen, self.WHITE, center, 21, 1)
             text = self.small_font.render(
@@ -221,7 +219,7 @@ class DroneGUI:
         previous = self.history[max(0, self.current_turn - 1)]
         for drone_id, current_state in current.items():
             x1, y1, finished, at_start = current_state
-            if finished:
+            if finished and self.progress >= 1.0:
                 continue
             x0, y0, _, was_at_start = previous[drone_id]
             x0, y0 = self._screen_point(x0, y0)
@@ -272,7 +270,7 @@ class DroneGUI:
             break
 
     def _draw_hud(self) -> None:
-        width, height = self.screen.get_size()
+        height = self.screen.get_height()
         title = self.big_font.render(
             "FLY-IN | DRONE SIMULATOR", True, self.WHITE
         )
