@@ -118,6 +118,33 @@ class DroneGUI:
                 drone.current_zone == self.start and not drone.in_transit)
         return result
 
+    def _drone_offsets(self, frame: dict[int, tuple[float, float, bool, bool]]
+                       ) -> dict[int, tuple[float, float]]:
+        groups: dict[tuple[float, float], list[int]] = {}
+        for drone_id, state in frame.items():
+            x, y, finished, _ = state
+            if finished:
+                continue
+
+            groups.setdefault((x, y), []).append(drone_id)
+
+        offsets: dict[int, tuple[float, float]] = {}
+        for drone_ids in groups.values():
+            drone_ids.sort()
+            count = len(drone_ids)
+
+            if count == 1:
+                offsets[drone_ids[0]] = (0.0, 0.0)
+                continue
+
+            radius = max(18.0, 12.0 * count / math.pi)
+            for index, drone_id in enumerate(drone_ids):
+                angle = 2 * math.pi * index / count
+                offsets[drone_id] = (math.cos(angle) * radius, math.sin(angle)
+                                     * radius)
+
+        return offsets
+
     def _is_complete(self) -> bool:
         return all(
             state[2] for state in self.history[self.current_turn].values())
@@ -217,35 +244,31 @@ class DroneGUI:
     def _draw_drones(self) -> None:
         current = self.history[self.current_turn]
         previous = self.history[max(0, self.current_turn - 1)]
-        for drone_id, current_state in current.items():
-            x1, y1, finished, at_start = current_state
+        current_offsets = self._drone_offsets(current)
+        previous_offsets = self._drone_offsets(previous)
+        for drone_id, state in current.items():
+            x1, y1, finished, _ = state
             if finished and self.progress >= 1.0:
                 continue
-            x0, y0, _, was_at_start = previous[drone_id]
+
+            x0, y0, _, _ = previous[drone_id]
             x0, y0 = self._screen_point(x0, y0)
             x1, y1 = self._screen_point(x1, y1)
-
-            angle = drone_id * 2.39996
-            radius = 30 + (drone_id % 3) * 11
-            dx = math.cos(angle) * radius
-            dy = math.sin(angle) * radius
-            if was_at_start:
-                x0 += dx
-                y0 += dy
-            if at_start:
-                x1 += dx
-                y1 += dy
-
+            dx0, dy0 = previous_offsets.get(drone_id, (0.0, 0.0))
+            dx1, dy1 = current_offsets.get(drone_id, (0.0, 0.0))
+            x0 += dx0
+            y0 += dy0
+            x1 += dx1
+            y1 += dy1
             t = self.progress
             x = x0 + (x1 - x0) * t
             y = y0 + (y1 - y0) * t
             center = (round(x), round(y))
             pygame.draw.circle(self.screen, self.CYAN, center, 10)
             pygame.draw.circle(self.screen, self.WHITE, center, 10, 1)
-            text = self.small_font.render(
-                str(drone_id), True, self.BACKGROUND
-            )
-            self.screen.blit(text, text.get_rect(center=center))
+            label = self.small_font.render(str(drone_id), True,
+                                           self.BACKGROUND)
+            self.screen.blit(label, label.get_rect(center=center),)
 
     def _draw_hover(self) -> None:
         mouse = pygame.mouse.get_pos()
