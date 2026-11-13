@@ -400,6 +400,49 @@ class Simulation:
         self.validator.validate_state(self.drones, start, end)
         return movements
 
+    def occupancy_report(self) -> list[str]:
+        result: list[str] = []
+
+        for name, zone in self.graph.zones.items():
+            if name in ("",):
+                continue
+
+            occupied = sum(
+                1
+                for drone in self.drones
+                if not drone.in_transit
+                and not drone.finished
+                and drone.current_zone == name
+            )
+
+            result.append(
+                f"Zone {name}: "
+                f"{occupied}/{zone.max_drones} drones"
+            )
+
+        for connection in self.graph.connections.values():
+            occupied = sum(
+                1
+                for drone in self.drones
+                if drone.in_transit
+                and frozenset((
+                    drone.current_zone,
+                    drone.path[drone.position + 1],
+                )) == frozenset((
+                    connection.first,
+                    connection.second,
+                ))
+            )
+
+            result.append(
+                f"Connection {connection.first}-"
+                f"{connection.second}: "
+                f"{occupied}/"
+                f"{connection.max_link_capacity} drones"
+            )
+
+        return result
+
     def run(self) -> None:
         while not all(drone.finished for drone in self.drones):
             movements = self.step()
